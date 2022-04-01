@@ -18,18 +18,20 @@ HIDDEN_DIM = 16
 output_dim=1
 n_layers = 2
 
-model = GRU(
-    hidden_dim=HIDDEN_DIM, input_dim=input_dim,
-    output_dim=output_dim, n_layers=n_layers
-            )
 
 utilities.seed.seed_everything(seed=SEED)
 
-train_dl, val_dl = get_iterators(
+train_dl, val_dl, edge_idx = get_iterators(
     historical_len = historical_len,
     pred_len = pred_len,
     batch_size = batch_size,
 )
+
+model = GRU(
+    input_dim=input_dim, hidden_dim=HIDDEN_DIM, 
+    output_dim=output_dim, n_layers=n_layers,
+    edge_idx=edge_idx
+    )
 
 trainer = Trainer(
     gpus=AVAIL_GPUS,

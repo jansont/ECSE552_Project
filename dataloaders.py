@@ -211,7 +211,6 @@ class WeatherData(Dataset):
                  labels,   
                  node_features,
                  edge_features, 
-                 edge_index, 
                  historical_len, 
                  prediction_len
                  ):
@@ -221,15 +220,15 @@ class WeatherData(Dataset):
         self.seq_len = historical_len + prediction_len
 
         self.edge_features = edge_features
-        self.edge_index = edge_index
 
-        label_mean = labels.mean(axis = (0,1))
-        label_sdev = labels.std(axis = (0,1))
+        label_mean = labels.mean()
+        label_sdev = labels.std()
         self.labels = normalize(labels, label_mean, label_sdev)
 
-        feature_mean = node_features.mean()
-        feature_sdev = node_features.std()
-        self.features = normalize(node_features, feature_mean, feature_sdev)
+        feat_mean = node_features.mean(axis=1)
+        feat_sdev = node_features.std(axis=1)
+        for i in range(self.features.shape[1]):
+            self.features[:, i] = (self.features[:, i] - feat_mean[i])/feat_sdev(i)
 
     def __len__(self):
         return len(self.labels - self.historical_len)
@@ -237,10 +236,9 @@ class WeatherData(Dataset):
     def __getitem__(self, idx):
         features = self.features[idx: idx + self.historical_len]
         edge_features = self.edge_features[idx:idx + self.historical_len]
-        edge_index = self.edge_index
         labels_x = self.labels[idx: idx + self.historical_len]
         labels_y = self.labels[idx + self.historical_len: idx + self.seq_len]
-        return (features, edge_index, edge_features, labels_x), labels_y
+        return (features, edge_features, labels_x), labels_y
 
 
 def get_iterators(historical_len, pred_len, batch_size):
@@ -275,7 +273,6 @@ def get_iterators(historical_len, pred_len, batch_size):
     train_dataset = WeatherData(edge_features = graph.edge_attr[:split], 
                         labels = graph_labels[:split],
                         node_features = graph_node_features[:split],
-                        edge_index = graph.edge_index,
                         historical_len = historical_len,
                         prediction_len = pred_len
                         )
@@ -284,7 +281,6 @@ def get_iterators(historical_len, pred_len, batch_size):
     val_dataset = WeatherData(edge_features = graph.edge_attr[split:], 
                         labels = graph_labels[split:],
                         node_features = graph_node_features[split:],
-                        edge_index = graph.edge_index,
                         historical_len = historical_len,
                         prediction_len = pred_len
                         )
@@ -292,7 +288,7 @@ def get_iterators(historical_len, pred_len, batch_size):
     train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
     val_dataloader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
 
-    return train_dataloader, val_dataloader
+    return train_dataloader, val_dataloader, graph.edge_index
 
 # def __test__dl__():
 #     for batch in train_dl:
