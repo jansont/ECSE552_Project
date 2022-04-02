@@ -4,18 +4,28 @@ from pytorch_lightning import utilities
 from dataloaders import get_iterators
 from models.GRU import GRU
 
+
+"""
+TODO
+
+Index out padding
+
+
+"""
+
+
 AVAIL_GPUS = 0
 SEED = 0
 
-EPOCHS = 2
+EPOCHS = 50
 
 historical_len = 7
 batch_size = 16
 pred_len = 1
 
-input_dim=13
-HIDDEN_DIM = 16
-output_dim=1
+input_dim = 54
+HIDDEN_DIM = 128
+output_dim=9
 n_layers = 2
 
 

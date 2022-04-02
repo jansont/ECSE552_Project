@@ -9,9 +9,9 @@ import torch
 from torch.utils.data import DataLoader, Dataset
 # from torch_geometric.data import Data
 from sklearn.metrics import mean_squared_error
+from torch.nn.utils.rnn import pad_sequence
 
-
-def data_to_numpy(weather_data, edge_names, node_names, station_ids, date_range): 
+def data_to_numpy(weather_data, edge_cols, node_cols, stations, date_range): 
     checkpt = 'checkpt'
     if not os.path.exists(checkpt):
         print('Checkpt doesnt exist, making it')
@@ -53,9 +53,7 @@ def data_to_numpy(weather_data, edge_names, node_names, station_ids, date_range)
 
     return graph_node_features, graph_edge_features, graph_labels
 
-def generate_nodes(metadata):
-    stations = metadata['STATION'].unique()
-    stations.sort()
+def generate_nodes(metadata, stations):
     nodes = OrderedDict()
     for id in stations:
         row = metadata[metadata['STATION'] == id]
@@ -118,11 +116,12 @@ def sparse_adjacency(adj):
 class Graph():
     def __init__(self,
                  graph_metadata,
+                 stations,
                  edge_data, 
                  distance_threshold):
-        self.graph_metadata = graph_metadata
+        self.graph_metadata = graph_metadata[graph_metadata['STATION'].isin(stations)]
         self.distance_threshold = distance_threshold
-        self.nodes = generate_nodes(graph_metadata)
+        self.nodes = generate_nodes(graph_metadata, stations)
         self.size = len(self.nodes)
         self.edge_data = edge_data
         self.edge_index, self.edge_attr = self.generate_edges()
@@ -219,26 +218,31 @@ class WeatherData(Dataset):
         self.pred_len = prediction_len
         self.seq_len = historical_len + prediction_len
 
-        self.edge_features = edge_features
+        self.edge_features = torch.tensor(edge_features)
 
         label_mean = labels.mean()
         label_sdev = labels.std()
         self.labels = normalize(labels, label_mean, label_sdev)
 
-        feat_mean = node_features.mean(axis=1)
-        feat_sdev = node_features.std(axis=1)
-        for i in range(self.features.shape[1]):
-            self.features[:, i] = (self.features[:, i] - feat_mean[i])/feat_sdev(i)
+        feat_mean = node_features.mean(axis=0)
+        feat_sdev = node_features.std(axis=0)
+
+        self.features = np.zeros(node_features.shape)
+        for i in range(node_features.shape[1]):
+            self.features[:, i] = (node_features[:, i] - feat_mean[i])/feat_sdev[i]
+
+        self.features = torch.tensor(self.features)
+        self.labels = torch.tensor(self.labels)
 
     def __len__(self):
-        return len(self.labels - self.historical_len)
+        return len(self.labels - self.seq_len)
 
     def __getitem__(self, idx):
         features = self.features[idx: idx + self.historical_len]
         edge_features = self.edge_features[idx:idx + self.historical_len]
         labels_x = self.labels[idx: idx + self.historical_len]
         labels_y = self.labels[idx + self.historical_len: idx + self.seq_len]
-        return (features, edge_features, labels_x), labels_y
+        return features, edge_features, labels_x, labels_y
 
 
 def get_iterators(historical_len, pred_len, batch_size):
@@ -246,28 +250,41 @@ def get_iterators(historical_len, pred_len, batch_size):
     file1 = 'la_weather_with_pm_per_day.csv'
     file2 = 'metadata_with_station.csv'
 
+
+
     weather_data = pd.read_csv(path+file1)
+    stations_2018_02 = weather_data[weather_data['DATE'] == '2018-02-01']['STATION'].unique() 
+    stations_2018_06 = weather_data[weather_data['DATE'] == '2018-06-08']['STATION'].unique() 
+    stations_2020_01 = weather_data[weather_data['DATE'] == '2020-01-03']['STATION'].unique() 
+    stations_2020_12 = weather_data[weather_data['DATE'] == '2020-12-31']['STATION'].unique() 
+
+    stations = [value for value in stations_2018_02 if value in stations_2018_06]
+    stations.sort()
+
     metadata = pd.read_csv(path+file2)
     metadata = metadata[metadata['location'] == 'Los Angeles (SoCAB)'].reset_index(drop = True)
 
     start = date(2018,2,1)
-    end = date(2021,1,1)
+    end = date(2018,6,8)
     date_range = pd.date_range(start,end-timedelta(days=1))
     date_range = [str(x)[:10] for x in date_range]
 
     node_cols = ['ceiling', 'visibility', 'dew', 'precipitation_duration', 'precipitation_depth']
     edge_cols = ['wind_x', 'wind_y']
-    stations = metadata['STATION'].unique()
-    stations.sort()
+
+    weather_data = weather_data[weather_data['STATION'].isin(stations)]
+    weather_data = weather_data[weather_data['DATE'].isin(date_range)]
+    weather_data = weather_data[['STATION','DATE','pm25']+edge_cols+node_cols]
+    weather_data = weather_data.fillna(weather_data.mean())
 
     graph_node_features, graph_edge_features, graph_labels = data_to_numpy(weather_data, edge_cols, node_cols, stations, date_range)
     graph_node_features = np.nan_to_num(graph_node_features)
 
-    print(graph_node_features.shape)
-    print(graph_edge_features.shape)
-    print(graph_labels.shape)
+    # print(graph_node_features.shape)
+    # print(graph_edge_features.shape)
+    # print(graph_labels.shape)
 
-    graph = Graph(metadata, graph_edge_features, distance_threshold = 30e3)
+    graph = Graph(metadata, stations, graph_edge_features, distance_threshold = 30e3)
     split = int(graph_labels.shape[0]*0.8)
 
     train_dataset = WeatherData(edge_features = graph.edge_attr[:split], 
@@ -285,8 +302,35 @@ def get_iterators(historical_len, pred_len, batch_size):
                         prediction_len = pred_len
                         )
 
-    train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-    val_dataloader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
+    def collate_batch(batch):
+        # feature_batch = list()
+        # edge_batch = list()
+        # labels_x_b = list()
+        # labels_y_b = list()
+        # for (features, edge_features, labels_x), labels_y in batch:
+        #     if len(labels_x) == historical_len and len(labels_y) == pred_len:
+        #         # print(labels_x.shape, labels_y.shape)
+        #         feature_batch.append(features)
+        #         edge_batch.append(edge_features)
+        #         labels_x_b.append(labels_x)
+        #         labels_y_b.append(labels_y)
+
+        # y = torch.Tensor(labels_y_b)
+
+        feature_batch = [item[0] for item in batch]
+        lengths = [x.shape[0] for x in feature_batch]
+        feature_batch = pad_sequence(feature_batch, batch_first=True)
+        edge_batch = pad_sequence([item[1] for item in batch], batch_first=True)
+        labels_x_b = pad_sequence([item[2] for item in batch])
+        x = (feature_batch, edge_batch, labels_x_b, lengths)
+        y = pad_sequence([item[3] for item in batch])
+       
+        return x, y
+
+    train_dataloader = DataLoader(train_dataset, batch_size=batch_size,
+                                    shuffle=True, drop_last=True, collate_fn=collate_batch)
+    val_dataloader = DataLoader(val_dataset, batch_size=batch_size,
+                                 shuffle=False, drop_last=True, collate_fn=collate_batch)
 
     return train_dataloader, val_dataloader, graph.edge_index
 

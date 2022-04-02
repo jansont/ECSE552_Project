@@ -268,9 +268,9 @@ date_range = [str(x)[:10] for x in date_range]
 node_cols = ['ceiling', 'visibility', 'dew', 'precipitation_duration', 'precipitation_depth', 'mean_aod','min_aod','max_aod']
 edge_cols = ['wind_x', 'wind_y']
 stations.sort()
+weather_data
 weather_data = weather_data[weather_data['STATION'].isin(stations)]
 weather_data = weather_data[weather_data['DATE'].isin(date_range)]
-weather_data
 weather_data = weather_data[['STATION','DATE','pm25']+edge_cols+node_cols]
 weather_data = weather_data.fillna(weather_data.mean())
 
