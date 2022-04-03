@@ -32,7 +32,7 @@ class GraphGNN(nn.Module):
         # print(node_features.shape)
         # print(edge_src.shape)
         # print(self.edge_index.shape)
-        # print(edge_weight.shape)
+        # print(edge_weight.shpe)
         node_src = node_features[:, edge_src]
         node_target = node_features[:, edge_target]
         # print(node_src.shape)
