@@ -112,6 +112,15 @@ def sparse_adjacency(adj):
 
     return torch.stack(index, dim=0), edge_attr
 
+def add_self_loops_to_sparse_adj(edge_idx, n):
+        source_w_self_loop = np.append(edge_idx[0], [i for i in range(n)])    #add self loops
+        target_w_self_loop = np.append(edge_idx[1], [i for i in range(n)])
+        edge_idx = np.array([source_w_self_loop, target_w_self_loop])
+        order = edge_idx[0].argsort()
+        edge_idx[0].sort()
+        edge_idx[1] = edge_idx[1][order] 
+        return(edge_idx) 
+
 
 class Graph():
     def __init__(self,
@@ -129,20 +138,23 @@ class Graph():
         self.adjacency = self.edge_list_sequence_to_adj()
 
     def generate_edges(self):
-        nodes = self.nodes             
+        nodes = self.nodes            
         node_list = list(self.nodes)        #get list of node ids
-        coordinates = list(zip(self.graph_metadata['Latitudes'], self.graph_metadata['Longitudes']))  #zip latitude and longitude of all nodes
+        coordinates = list(zip(self.graph_metadata['Latitudes'], self.graph_metadata['Longitudes'])) 
         distance_matrix = generate_node_distances(coordinates)  #square matrix of distance to all other nodes
-
-        adj_matrix = np.identity(self.size)
+        adj_matrix = np.zeros([self.size, self.size])
         adj_matrix[distance_matrix < self.distance_threshold] = 1 #in adj matrix, set entry to 1 if distance between nodes below threshold
 
         distance_matrix = distance_matrix * adj_matrix
+        mean_distance = np.mean(distance_matrix)
+        std_distance = np.std(distance_matrix)
 
         edge_idx, edge_dist = sparse_adjacency(torch.tensor(distance_matrix)) #edge_idx : shape (2 * number of connected nodes (dis < threshold)) 
         edge_idx, edge_dist = edge_idx.numpy(), edge_dist.numpy()             #edge_dist: same shape as above, distance values between those node indices
-        edge_vectors = []#other edge attributes?
+        edge_idx = add_self_loops_to_sparse_adj(edge_idx, len(node_list))
+        edge_idx = add_self_loops_to_sparse_adj(edge_idx, len(node_list))
 
+        windx, windy, dx, dy = [],[],[],[]
         for i in range(edge_idx.shape[1]):
             #get index of non-zero edges
             source_idx = edge_idx[0, i]
@@ -155,7 +167,7 @@ class Graph():
             lat1 = nodes[key1]['Latitude']
             long1 = nodes[key1]['Longitude']
             distance_x = geo_distance((lat0, 0), (lat1, 0))
-            distance_y = geo_distance((0, long1), (0, long1))
+            distance_y = geo_distance((0, long0), (0, long1))
             edge_vect_x = distance_x 
             #get wind along x and y vectors from both source and edge
             wind_source_x = self.edge_data[:, source_idx, 0]
@@ -165,27 +177,36 @@ class Graph():
             #average source and edge wind components to get net wind 
             wind_x = (wind_source_x + wind_dest_x)/2
             wind_y = (wind_source_y + wind_dest_y)/2
+            mean_wind_x, mean_wind_y = np.mean(wind_x), np.mean(wind_y)
+            std_wind_x, std_wind_y = np.std(wind_x), np.std(wind_y)
+            wind_x = (wind_x - mean_wind_x) / std_wind_x
+            wind_y = (wind_y - mean_wind_y) / std_wind_y
+            distance_x = (distance_x - mean_distance) / std_distance
+            distance_y = (distance_y - mean_distance) / std_distance
 
-            diffusion_x = distance_x * wind_x 
-            diffusion_y = distance_y * wind_y
+            # edge_vectors.append(np.array([distance_x, distance_y, wind_x, wind_y]))
+            windx.append(wind_x), windy.append(wind_y)
+            dx.append(distance_x), dy.append(distance_y)
+        windx = np.stack(windx).transpose()
+        windy = np.stack(windy).transpose()
+        dx = np.tile(np.stack(dx), [windx.shape[0],1])
+        dy = np.tile(np.stack(dy), [windx.shape[0],1])
 
-            dist_dir = np.tan(distance_y / (distance_x))
-            wind_dir = np.tan(wind_y / (wind_x+1e-12))
-            wind_str = wind_x**2 + wind_y**2
-            distance = distance_x**2 + distance_y**2
-            delta_angle = np.abs(wind_dir - dist_dir)
-            edge_weight = (wind_str * np.cos(delta_angle) / distance**0.5)
-            #normalize edge weights
-            mean_edge_weight = np.mean(edge_weight)
-            std_edge_weight = np.std(edge_weight)
-            normalized_edge_weight = (edge_weight - mean_edge_weight) / std_edge_weight
+        edge_vectors = np.array([windx, windy, dx, dy]).transpose(1,2,0)
 
-            edge_vectors.append(edge_weight)
+        distance = (dy**2 + dx**2)**0.5
+        wind = (windx**2 + windy**2)**0.5
+        theta_dist = np.tan(dy + 1e-12 / (dx + 1e-12))
+        theta_wind = np.tan(dy + 1e-12 / (dx + 1e-12))
+        delta_angle = np.abs(theta_dist - theta_wind)
+        edge_weight = (wind * np.cos(delta_angle) / distance)
 
-        edge_vectors = np.stack(edge_vectors)
+        mean_edge_weight = np.mean(edge_weight)
+        std_edge_weight = np.std(edge_weight)
+        edge_weight = (edge_weight - mean_edge_weight) / std_edge_weight
+        return edge_idx, edge_weight.transpose()
 
-        return edge_idx, edge_vectors
-
+        
     def edge_list_to_adj(self):
         adj = np.identity(self.edge_index.size)
         for k,(i,j) in enumerate(zip(self.edge_index[0], self.edge_index[1])):

@@ -4,6 +4,7 @@ from pytorch_lightning import LightningModule
 from torch.nn import Sequential, Linear, Sigmoid
 from torch.nn import functional as F
 from torch_scatter import scatter_add
+from torchmetrics import MeanSquaredError
 
 class GraphGNN(nn.Module):
     def __init__(self, edge_index, in_dim, out_dim):
@@ -74,6 +75,7 @@ class GRU(LightningModule):
         self.rnncell = nn.GRUCell(input_dim, hidden_dim, n_layers)
 
         self.loss_func = nn.MSELoss()
+        self.metric = MeanSquaredError(squared=False)
 
     def forward(self, X):
         """
@@ -103,7 +105,7 @@ class GRU(LightningModule):
         out_total = torch.stack([out_total[lengths[j]-1, j]
                         for j in range(batch_size)])
 
-        return out_total[-1].squeeze()
+        return out_total.squeeze()
 
 
     def predict_step(self, batch, batch_idx):
@@ -114,6 +116,8 @@ class GRU(LightningModule):
     def step(self, batch, batch_idx):
         y, pred = self.predict_step(batch, batch_idx)
         loss = self.loss_func(y, pred)
+        metric = self.metric(pred, y)
+        self.log('RMSE', self.metric)
         return loss
 
     def training_step(self, batch, batch_idx):
