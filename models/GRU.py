@@ -80,8 +80,6 @@ class GRU(LightningModule):
     def forward(self, X):
         """
         X : (node_features, edge_features, labels_x)
-        fc: To return the fully connected result or the hidden states
-        res_total has shape (Seq_len, Batch size, hidden dims/output dims
         """
         (node_features, edge_features, labels_x, lengths) = X
         seq_len = node_features.shape[1]
