@@ -324,19 +324,6 @@ def get_iterators(historical_len, pred_len, batch_size):
                         )
 
     def collate_batch(batch):
-        # feature_batch = list()
-        # edge_batch = list()
-        # labels_x_b = list()
-        # labels_y_b = list()
-        # for (features, edge_features, labels_x), labels_y in batch:
-        #     if len(labels_x) == historical_len and len(labels_y) == pred_len:
-        #         # print(labels_x.shape, labels_y.shape)
-        #         feature_batch.append(features)
-        #         edge_batch.append(edge_features)
-        #         labels_x_b.append(labels_x)
-        #         labels_y_b.append(labels_y)
-
-        # y = torch.Tensor(labels_y_b)
         feature_batch = [item[0] for item in batch]
         lengths = [x.shape[0] for x in feature_batch]
         feature_batch = pad_sequence(feature_batch, batch_first=True)
@@ -345,8 +332,7 @@ def get_iterators(historical_len, pred_len, batch_size):
         edge_batch = torch.nan_to_num(edge_batch, nan = 0.0)
         labels_x_b = pad_sequence([item[2] for item in batch])
         x = (feature_batch, edge_batch, labels_x_b, lengths)
-        y = pad_sequence([item[3] for item in batch])
-       
+        y = pad_sequence([item[3] for item in batch])       
         return x, y
 
     train_dataloader = DataLoader(train_dataset, batch_size=batch_size,
@@ -355,14 +341,3 @@ def get_iterators(historical_len, pred_len, batch_size):
                                  shuffle=False, drop_last=True, collate_fn=collate_batch)
 
     return train_dataloader, val_dataloader, graph.edge_index
-
-# def __test__dl__():
-#     for batch in train_dl:
-#         (node_features, edge_index, edge_features, labels_x), labels_y = batch
-#         print(node_features.shape)
-#         print(edge_index.shape)
-#         print(edge_features.shape)
-#         print(labels_x.shape)
-#         print(labels_y.shape)
-#         # print(labels_x[0], labels_y[0])
-#         break
