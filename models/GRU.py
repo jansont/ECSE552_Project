@@ -11,8 +11,8 @@ from torch_geometric.nn import GCNConv
 class GCN(torch.nn.Module):
     def __init__(self, in_channels, out_channels):
         super(GCN, self).__init__()
-        self.h1 = 32
-        self.h2 = 32
+        self.h1 = 16
+        self.h2 = 10
         self.conv1 = GCNConv(in_channels, self.h1)
         self.conv2 = GCNConv(self.h1, self.h1)
         self.conv3 = GCNConv(self.h1, out_channels)
@@ -31,16 +31,17 @@ class GraphGNN(nn.Module):
         super(GraphGNN, self).__init__()
         self.edge_index = torch.LongTensor(edge_index)
 
-        e_h = 32
-        e_out = 30
+        e_h = 16
+        e_out = 16
         n_out = out_dim
-        n_h = 28
+        e_h2 = 16
+        n_h = 12
 
         self.edge_mlp = Sequential(Linear(in_dim, e_h),
                                    ReLU(),
-                                   Linear(e_h, e_h),
+                                   Linear(e_h, e_h2),
                                    ReLU(),
-                                   Linear(e_h, e_out),
+                                   Linear(e_h2, e_out),
                                    Sigmoid(),
                                    )
         self.node_mlp = Sequential(Linear(e_out, n_h),
@@ -63,9 +64,10 @@ class GraphGNN(nn.Module):
         node_target = node_features[:, edge_target]
         # print(node_src.shape)
         # print(node_target.shape)
-    
+
         out = torch.cat([node_src, node_target, edge_weight.unsqueeze(-1)], dim=-1).float()
         # print(out.shape)
+
         out = self.edge_mlp(out)
         # print(out.shape)
 

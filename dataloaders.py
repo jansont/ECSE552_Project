@@ -122,7 +122,8 @@ def add_self_loops_to_sparse_adj(edge_idx, n):
         edge_idx[1] = edge_idx[1][order] 
         return(edge_idx) 
 
-
+def ReLU(x):
+    return x * (x>0)
 class Graph():
     def __init__(self,
                  graph_metadata,
@@ -193,6 +194,10 @@ class Graph():
         dx = np.tile(np.stack(dx), [windx.shape[0],1])
         dy = np.tile(np.stack(dy), [windx.shape[0],1])
 
+        temp = wind_y
+        wind_y = wind_x
+        wind_x = temp
+
         edge_vectors = np.array([windx, windy, dx, dy]).transpose(1,2,0)
 
         distance = (dy**2 + dx**2)**0.5
@@ -205,6 +210,9 @@ class Graph():
         mean_edge_weight = np.mean(edge_weight)
         std_edge_weight = np.std(edge_weight)
         edge_weight = (edge_weight - mean_edge_weight) / std_edge_weight
+
+        edge_weight = ReLU(edge_weight)
+
         return edge_idx, edge_weight.transpose()
 
 
