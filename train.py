@@ -8,15 +8,15 @@ import pandas as pd
 AVAIL_GPUS = 0
 SEED = 0
 
-EPOCHS = 100
+EPOCHS = 20
 
 historical_len = 7
 batch_size = 16
 pred_len = 1
 
-input_dim = 54
+input_dim = 63      #input to GRU
 HIDDEN_DIM = 128
-output_dim = 9
+output_dim = 9     #output to GRU
 n_layers = 2
 
 
@@ -49,9 +49,9 @@ trainer.fit(model, train_dl, val_dl)
 
 training_df = {'Loss': model.training_losses, 'Error': model.training_metrics}
 training_df  = pd.DataFrame(training_df)
-training_df.to_csv('/Users/alixdanglejan-chatillon/ECSE552_Project/Results/TrainingResults.csv')
+training_df.to_csv('/Users/alixdanglejan-chatillon/ECSE552_Project/Results/TrainingResults1.csv')
 
 validation_df = {'Loss': model.validation_losses, 'Error': model.validation_metrics}
 validation_df  = pd.DataFrame(validation_df)
-validation_df.to_csv('/Users/alixdanglejan-chatillon/ECSE552_Project/Results/ValidationResults.csv')
+validation_df.to_csv('/Users/alixdanglejan-chatillon/ECSE552_Project/Results/ValidationResults1.csv')
 

@@ -16,13 +16,18 @@ class GraphGNN(nn.Module):
         e_h = 32
         e_out = 30
         n_out = out_dim
+        n_h = 28
 
         self.edge_mlp = Sequential(Linear(in_dim, e_h),
+                                   ReLU(),
+                                   Linear(e_h, e_h),
                                    ReLU(),
                                    Linear(e_h, e_out),
                                    Sigmoid(),
                                    )
-        self.node_mlp = Sequential(Linear(e_out, n_out),
+        self.node_mlp = Sequential(Linear(e_out, n_h),
+                                   ReLU(),
+                                   Linear(n_h, n_out),
                                    Sigmoid(),
                                    )
 
@@ -48,12 +53,11 @@ class GraphGNN(nn.Module):
 
 
         out_add = scatter_add(out, edge_target, dim=1, dim_size=node_features.size(1))
-        # out_sub = scatter_sub(out, edge_src, dim=1, dim_size=x.size(1))
+        # # out_sub = scatter_sub(out, edge_src, dim=1, dim_size=x.size(1))
         out_sub = scatter_add(out.neg(), edge_src, dim=1, dim_size=node_features.size(1))  # For higher version of PyG.
 
         out = out_add + out_sub
         out = self.node_mlp(out)
-
         return out
 
 
@@ -91,17 +95,32 @@ class GRU(LightningModule):
         (node_features, edge_features, labels_x, lengths) = X
         seq_len = node_features.shape[1]
         batch_size = node_features.shape[0]
-        print(labels_x.shape)
+    
 
         h = torch.zeros(batch_size, self.hid_dim)
         out_total= []
         for i in range(seq_len):
             graph_input = (node_features[:, i], edge_features[:, i])
             graph_out = self.graph_gnn(graph_input)
+            graph_out = graph_out.squeeze()
             # x = torch.cat((labels_x[:], feature[:, self.hist_len + i]), dim=-1)
             # print(graph_out.shape, node_features[:, i].shape)
 
-            x = torch.cat([graph_out, node_features[:, i]], dim=-1)
+            pseudo_index = torch.isnan(labels_x[i])
+            pseudo_labels = torch.zeros(labels_x[i].shape)
+
+          
+
+
+            pseudo_labels[pseudo_index] = graph_out[pseudo_index]
+
+            pseudo_labels[~pseudo_index] = labels_x[i][~pseudo_index]
+            # total = graph_out[labels_x.shape[-1]:].reshape([batch_size, labels_x.shape[-1], 4])
+            
+            pseudo_labels = pseudo_labels.unsqueeze(dim = -1)
+
+            graph_out = graph_out.unsqueeze(-1)
+            x = torch.cat([pseudo_labels, node_features[:, i], graph_out ], dim=-1)
             x = torch.flatten(x, 1, -1)
             h = self.rnncell(x.float(), h)
             out = self.fc_out(h)

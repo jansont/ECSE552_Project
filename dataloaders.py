@@ -331,6 +331,7 @@ def get_iterators(historical_len, pred_len, batch_size):
         edge_batch = pad_sequence([item[1] for item in batch], batch_first=True)
         edge_batch = torch.nan_to_num(edge_batch, nan = 0.0)
         labels_x_b = pad_sequence([item[2] for item in batch])
+        labels_x_b = labels_x_b.float()
         x = (feature_batch, edge_batch, labels_x_b, lengths)
         y = pad_sequence([item[3] for item in batch])       
         return x, y
