@@ -1,12 +1,30 @@
-import torch.optim
 import torch.nn as nn
+import torch.optim
 from pytorch_lightning import LightningModule
 from torch.nn import Sequential, Linear, Sigmoid
 from torch.nn import functional as F
 from torch_scatter import scatter_add
-from torchmetrics import MeanAbsolutePercentageError
+from pytorch_forecasting.metrics import MAPE
 from torch.nn import ReLU
+from torch_geometric.nn import GCNConv
 
+class GCN(torch.nn.Module):
+    def __init__(self, in_channels, out_channels):
+        super(GCN, self).__init__()
+        self.h1 = 32
+        self.h2 = 32
+        self.conv1 = GCNConv(in_channels, self.h1)
+        self.conv2 = GCNConv(self.h1, self.h1)
+        self.conv3 = GCNConv(self.h1, out_channels)
+
+
+    def forward(self, x, edge_index) :
+        # x: Node feature matrix of shape [num_nodes, in_channels]
+        # edge_index: Graph connectivity matrix of shape [2, num_edges]
+        x = self.conv1(x, edge_index).relu()
+        x = self.conv2(x, edge_index).relu()
+        x = self.conv3(x, edge_index)
+        return x
 
 class GraphGNN(nn.Module):
     def __init__(self, edge_index, in_dim, out_dim):
@@ -45,7 +63,7 @@ class GraphGNN(nn.Module):
         node_target = node_features[:, edge_target]
         # print(node_src.shape)
         # print(node_target.shape)
-
+    
         out = torch.cat([node_src, node_target, edge_weight.unsqueeze(-1)], dim=-1).float()
         # print(out.shape)
         out = self.edge_mlp(out)
@@ -69,19 +87,20 @@ class GRU(LightningModule):
         self.hid_dim = hidden_dim
         self.n_layers = n_layers
         self.out_dim = output_dim
-        self.edge_index = edge_idx
+        self.edge_index = torch.LongTensor(edge_idx)
 
-        self.gnn_in = 11
-        self.gnn_out = 1
+        self.gnn_in = 21 #number of node features (21 for GNN, 10 for GRU)
+        self.gnn_out = 1 #1 node label
 
         self.fc_in = nn.Linear(self.in_dim, self.hid_dim)
         self.fc_out = nn.Linear(self.hid_dim, self.out_dim)
 
         self.graph_gnn = GraphGNN(edge_idx, self.gnn_in, self.gnn_out)
         self.rnncell = nn.GRUCell(input_dim, hidden_dim, n_layers)
+        self.gcn = GCN(self.gnn_in, self.gnn_out)
 
         self.loss_func = nn.MSELoss()
-        self.metric = MeanAbsolutePercentageError()
+        self.metric = MAPE()
 
         self.training_losses = []
         self.validation_losses = []
@@ -100,18 +119,16 @@ class GRU(LightningModule):
         h = torch.zeros(batch_size, self.hid_dim)
         out_total= []
         for i in range(seq_len):
+            # graph_input = (node_features[:, i])
+            # graph_out = self.gcn(graph_input.float(), self.edge_index)
+
             graph_input = (node_features[:, i], edge_features[:, i])
             graph_out = self.graph_gnn(graph_input)
+
             graph_out = graph_out.squeeze()
-            # x = torch.cat((labels_x[:], feature[:, self.hist_len + i]), dim=-1)
-            # print(graph_out.shape, node_features[:, i].shape)
 
             pseudo_index = torch.isnan(labels_x[i])
             pseudo_labels = torch.zeros(labels_x[i].shape)
-
-          
-
-
             pseudo_labels[pseudo_index] = graph_out[pseudo_index]
 
             pseudo_labels[~pseudo_index] = labels_x[i][~pseudo_index]
@@ -120,6 +137,7 @@ class GRU(LightningModule):
             pseudo_labels = pseudo_labels.unsqueeze(dim = -1)
 
             graph_out = graph_out.unsqueeze(-1)
+
             x = torch.cat([pseudo_labels, node_features[:, i], graph_out ], dim=-1)
             x = torch.flatten(x, 1, -1)
             h = self.rnncell(x.float(), h)

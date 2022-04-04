@@ -8,15 +8,21 @@ import pandas as pd
 AVAIL_GPUS = 0
 SEED = 0
 
-EPOCHS = 20
+EPOCHS = 100   
 
-historical_len = 7
+'''
+Test:
+- GCN with full data
+- 
+'''
+
+historical_len = 1
 batch_size = 16
 pred_len = 1
 
-input_dim = 63      #input to GRU
+input_dim = 108      #input to GRU 9 x (num node feat )
 HIDDEN_DIM = 128
-output_dim = 9     #output to GRU
+output_dim = 9     #output to GRU (number of nodes)
 n_layers = 2
 
 

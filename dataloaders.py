@@ -41,6 +41,7 @@ def data_to_numpy(weather_data, edge_cols, node_cols, stations, date_range):
                     if len(edge_vals) == 0:  #if no edge feature, set to 0
                         edge_vals = np.zeros(len(edge_cols))
                     graph_edge_features[day_idx, station_idx] = edge_vals
+        print('Creating checkpoint')
         np.save(os.path.join(checkpt, 'graph_node_features'), graph_node_features)
         np.save(os.path.join(checkpt, 'graph_edge_features'), graph_edge_features)
         np.save(os.path.join(checkpt, 'graph_labels'), graph_labels)
@@ -290,12 +291,14 @@ def get_iterators(historical_len, pred_len, batch_size):
     date_range = pd.date_range(start,end-timedelta(days=1))
     date_range = [str(x)[:10] for x in date_range]
 
-    node_cols = ['ceiling', 'visibility', 'dew', 'precipitation_duration', 'precipitation_depth']
+    node_cols = ['wind_x', 'wind_y','ceiling', 'visibility', 'dew', 'precipitation_duration', 'precipitation_depth', 'mean_aod','min_aod','max_aod']
     edge_cols = ['wind_x', 'wind_y']
+    # node_cols = ['wind_x', 'wind_y','mean_aod','min_aod','max_aod']
 
     weather_data = weather_data[weather_data['STATION'].isin(stations)]
     weather_data = weather_data[weather_data['DATE'].isin(date_range)]
-    weather_data = weather_data[['STATION','DATE','pm25']+edge_cols+node_cols]
+    # weather_data = weather_data[['STATION','DATE','pm25']+edge_cols+node_cols]
+    weather_data = weather_data[['STATION','DATE','pm25']+node_cols]
     weather_data = weather_data.fillna(weather_data.mean())
 
     graph_node_features, graph_edge_features, graph_labels = data_to_numpy(weather_data, edge_cols, node_cols, stations, date_range)
