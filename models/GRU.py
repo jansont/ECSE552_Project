@@ -4,7 +4,9 @@ from pytorch_lightning import LightningModule
 from torch.nn import Sequential, Linear, Sigmoid
 from torch.nn import functional as F
 from torch_scatter import scatter_add
-from torchmetrics import MeanSquaredError
+from torchmetrics import MeanAbsolutePercentageError
+from torch.nn import ReLU
+
 
 class GraphGNN(nn.Module):
     def __init__(self, edge_index, in_dim, out_dim):
@@ -16,7 +18,7 @@ class GraphGNN(nn.Module):
         n_out = out_dim
 
         self.edge_mlp = Sequential(Linear(in_dim, e_h),
-                                   Sigmoid(),
+                                   ReLU(),
                                    Linear(e_h, e_out),
                                    Sigmoid(),
                                    )
@@ -75,7 +77,12 @@ class GRU(LightningModule):
         self.rnncell = nn.GRUCell(input_dim, hidden_dim, n_layers)
 
         self.loss_func = nn.MSELoss()
-        self.metric = MeanSquaredError(squared=False)
+        self.metric = MeanAbsolutePercentageError()
+
+        self.training_losses = []
+        self.validation_losses = []
+        self.training_metrics = []
+        self.validation_metrics = []
 
     def forward(self, X):
         """
@@ -115,14 +122,20 @@ class GRU(LightningModule):
         y, pred = self.predict_step(batch, batch_idx)
         loss = self.loss_func(y, pred)
         metric = self.metric(pred, y)
-        self.log('RMSE', self.metric)
-        return loss
+        self.log('RMSE', metric)
+        return loss, metric
 
     def training_step(self, batch, batch_idx):
-        return self.step(batch, batch_idx)
+        training_loss, training_metric = self.step(batch, batch_idx)
+        self.training_losses.append(training_loss.detach().numpy())
+        self.training_metrics.append(training_metric.detach().numpy())
+        return training_loss
 
     def validation_step(self, batch, batch_idx):
-        return self.step(batch, batch_idx)
+        validation_loss, validation_metric = self.step(batch, batch_idx)
+        self.validation_losses.append(validation_loss.detach().numpy())
+        self.validation_metrics.append(validation_metric.detach().numpy())
+        return validation_loss
 
     def test_step(self, batch, batch_idx):
         return self.step(batch, batch_idx)

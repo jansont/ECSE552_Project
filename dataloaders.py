@@ -151,8 +151,8 @@ class Graph():
 
         edge_idx, edge_dist = sparse_adjacency(torch.tensor(distance_matrix)) #edge_idx : shape (2 * number of connected nodes (dis < threshold)) 
         edge_idx, edge_dist = edge_idx.numpy(), edge_dist.numpy()             #edge_dist: same shape as above, distance values between those node indices
-        edge_idx = add_self_loops_to_sparse_adj(edge_idx, len(node_list))
-        edge_idx = add_self_loops_to_sparse_adj(edge_idx, len(node_list))
+        # edge_idx = add_self_loops_to_sparse_adj(edge_idx, len(node_list))
+        # edge_idx = add_self_loops_to_sparse_adj(edge_idx, len(node_list))
 
         windx, windy, dx, dy = [],[],[],[]
         for i in range(edge_idx.shape[1]):
@@ -206,7 +206,7 @@ class Graph():
         edge_weight = (edge_weight - mean_edge_weight) / std_edge_weight
         return edge_idx, edge_weight.transpose()
 
-        
+
     def edge_list_to_adj(self):
         adj = np.identity(self.edge_index.size)
         for k,(i,j) in enumerate(zip(self.edge_index[0], self.edge_index[1])):
@@ -308,26 +308,28 @@ def get_iterators(historical_len, pred_len, batch_size):
     graph = Graph(metadata, stations, graph_edge_features, distance_threshold = 30e3)
     split = int(graph_labels.shape[0]*0.8)
 
-    train_dataset = WeatherData(edge_features = graph.edge_attr[:split], 
-                        labels = graph_labels[:split],
-                        node_features = graph_node_features[:split],
+    train_dataset = WeatherData(edge_features = np.nan_to_num(graph.edge_attr[:split], nan=0.0), 
+                        labels = np.nan_to_num(graph_labels[:split], nan=0.0),
+                        node_features = np.nan_to_num(graph_node_features[:split], nan=0.0),
                         historical_len = historical_len,
-                        prediction_len = pred_len
+                        prediction_len = np.nan_to_num(pred_len, nan=0.0)
                         )
 
 
-    val_dataset = WeatherData(edge_features = graph.edge_attr[split:], 
-                        labels = graph_labels[split:],
-                        node_features = graph_node_features[split:],
+    val_dataset = WeatherData(edge_features = np.nan_to_num(graph.edge_attr[split:], nan=0.0), 
+                        labels = np.nan_to_num(graph_labels[split:], nan=0.0),
+                        node_features = np.nan_to_num(graph_node_features[split:], nan=0.0),
                         historical_len = historical_len,
-                        prediction_len = pred_len
+                        prediction_len = np.nan_to_num(pred_len, nan=0.0)
                         )
 
     def collate_batch(batch):
         feature_batch = [item[0] for item in batch]
         lengths = [x.shape[0] for x in feature_batch]
         feature_batch = pad_sequence(feature_batch, batch_first=True)
+        feature_batch = torch.nan_to_num(feature_batch, nan = 0.0)
         edge_batch = pad_sequence([item[1] for item in batch], batch_first=True)
+        edge_batch = torch.nan_to_num(edge_batch, nan = 0.0)
         labels_x_b = pad_sequence([item[2] for item in batch])
         x = (feature_batch, edge_batch, labels_x_b, lengths)
         y = pad_sequence([item[3] for item in batch])       
@@ -339,14 +341,3 @@ def get_iterators(historical_len, pred_len, batch_size):
                                  shuffle=False, drop_last=True, collate_fn=collate_batch)
 
     return train_dataloader, val_dataloader, graph.edge_index
-
-# def __test__dl__():
-#     for batch in train_dl:
-#         (node_features, edge_index, edge_features, labels_x), labels_y = batch
-#         print(node_features.shape)
-#         print(edge_index.shape)
-#         print(edge_features.shape)
-#         print(labels_x.shape)
-#         print(labels_y.shape)
-#         # print(labels_x[0], labels_y[0])
-#         break
