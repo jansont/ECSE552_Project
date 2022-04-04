@@ -93,6 +93,7 @@ class GRU(LightningModule):
         (node_features, edge_features, labels_x, lengths) = X
         seq_len = node_features.shape[1]
         batch_size = node_features.shape[0]
+        print(labels_x.shape)
 
         h = torch.zeros(batch_size, self.hid_dim)
         out_total= []
