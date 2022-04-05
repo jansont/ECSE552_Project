@@ -1,3 +1,5 @@
+from sklearn import metrics
+from torch import dropout
 import torch.nn as nn
 import torch.optim
 from pytorch_lightning import LightningModule
@@ -8,43 +10,61 @@ from pytorch_forecasting.metrics import MAPE
 from torch.nn import ReLU
 from torch_geometric.nn import GCNConv
 
+class RMSLELoss(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.mse = nn.MSELoss()
+        
+    def forward(self, pred, actual):
+        return torch.sqrt(self.mse(torch.log(pred + 1), torch.log(actual + 1)))
+
+        
+
 class GCN(torch.nn.Module):
-    def __init__(self, in_channels, out_channels):
+    def __init__(self, in_channels, dropout):
         super(GCN, self).__init__()
         self.h1 = 16
         self.h2 = 10
+        self.dropout = nn.Dropout(dropout)
         self.conv1 = GCNConv(in_channels, self.h1)
         self.conv2 = GCNConv(self.h1, self.h1)
-        self.conv3 = GCNConv(self.h1, out_channels)
+        self.conv3 = GCNConv(self.h1, 1)
 
 
     def forward(self, x, edge_index) :
         # x: Node feature matrix of shape [num_nodes, in_channels]
         # edge_index: Graph connectivity matrix of shape [2, num_edges]
-        x = self.conv1(x, edge_index).relu()
-        x = self.conv2(x, edge_index).relu()
+        x = self.conv1(x, edge_index)
+        x = self.dropout(x)
+        x = nn.ReLU()
+        x = self.conv2(x, edge_index)
+        x = self.dropout(x)
+        x = nn.ReLU(x)
         x = self.conv3(x, edge_index)
         return x
 
-class GraphGNN(nn.Module):
-    def __init__(self, edge_index, in_dim, out_dim):
-        super(GraphGNN, self).__init__()
+class EdgeGNN(nn.Module):
+    def __init__(self, edge_index, in_dim, dropout):
+        super(EdgeGNN, self).__init__()
         self.edge_index = torch.LongTensor(edge_index)
 
         e_h = 16
         e_out = 16
-        n_out = out_dim
+        n_out = 1
         e_h2 = 16
         n_h = 12
 
         self.edge_mlp = Sequential(Linear(in_dim, e_h),
+                                   nn.Dropout(dropout),                                   
                                    ReLU(),
                                    Linear(e_h, e_h2),
+                                   nn.Dropout(dropout),                                  
                                    ReLU(),
                                    Linear(e_h2, e_out),
                                    Sigmoid(),
                                    )
         self.node_mlp = Sequential(Linear(e_out, n_h),
+                                    nn.Dropout(dropout),       
                                    ReLU(),
                                    Linear(n_h, n_out),
                                    Sigmoid(),
@@ -56,24 +76,14 @@ class GraphGNN(nn.Module):
         """
         node_features, edge_weight = x
         edge_src, edge_target = self.edge_index
-        # print(node_features.shape)
-        # print(edge_src.shape)
-        # print(self.edge_index.shape)
-        # print(edge_weight.shpe)
+
         node_src = node_features[:, edge_src]
         node_target = node_features[:, edge_target]
-        # print(node_src.shape)
-        # print(node_target.shape)
 
         out = torch.cat([node_src, node_target, edge_weight.unsqueeze(-1)], dim=-1).float()
-        # print(out.shape)
 
         out = self.edge_mlp(out)
-        # print(out.shape)
-
-
         out_add = scatter_add(out, edge_target, dim=1, dim_size=node_features.size(1))
-        # # out_sub = scatter_sub(out, edge_src, dim=1, dim_size=x.size(1))
         out_sub = scatter_add(out.neg(), edge_src, dim=1, dim_size=node_features.size(1))  # For higher version of PyG.
 
         out = out_add + out_sub
@@ -82,7 +92,18 @@ class GraphGNN(nn.Module):
 
 
 class GRU(LightningModule):
-    def __init__(self, input_dim, hidden_dim, output_dim, n_layers, edge_idx):
+    def __init__(self,
+                input_dim,
+                hidden_dim,
+                output_dim,
+                n_layers,
+                edge_idx,
+                graph_model,
+                criterion, 
+                learning_rate, 
+                weight_decay, 
+                metrics):
+
         super().__init__()
 
         self.in_dim = input_dim
@@ -91,18 +112,17 @@ class GRU(LightningModule):
         self.out_dim = output_dim
         self.edge_index = torch.LongTensor(edge_idx)
 
-        self.gnn_in = 21 #number of node features (21 for GNN, 10 for GRU)
-        self.gnn_out = 1 #1 node label
+        self.graph_model = graph_model
 
         self.fc_in = nn.Linear(self.in_dim, self.hid_dim)
         self.fc_out = nn.Linear(self.hid_dim, self.out_dim)
 
-        self.graph_gnn = GraphGNN(edge_idx, self.gnn_in, self.gnn_out)
         self.rnncell = nn.GRUCell(input_dim, hidden_dim, n_layers)
-        self.gcn = GCN(self.gnn_in, self.gnn_out)
 
-        self.loss_func = nn.MSELoss()
-        self.metric = MAPE()
+        self.loss_func = criterion
+        self.metric = metrics
+        self.learning_rate = learning_rate
+        self.weight_decay = weight_decay
 
         self.training_losses = []
         self.validation_losses = []
@@ -121,11 +141,13 @@ class GRU(LightningModule):
         h = torch.zeros(batch_size, self.hid_dim)
         out_total= []
         for i in range(seq_len):
-            # graph_input = (node_features[:, i])
-            # graph_out = self.gcn(graph_input.float(), self.edge_index)
 
-            graph_input = (node_features[:, i], edge_features[:, i])
-            graph_out = self.graph_gnn(graph_input)
+            if isinstance(self.graph_model, GCN):
+                graph_input = (node_features[:, i])
+                graph_out = self.graph_model(graph_input.float(), self.edge_index)
+            elif isinstance(self.graph_model, EdgeGNN):
+                graph_input = (node_features[:, i], edge_features[:, i])
+                graph_out = self.graph_model(graph_input)
 
             graph_out = graph_out.squeeze()
 
@@ -181,4 +203,5 @@ class GRU(LightningModule):
         return self.step(batch, batch_idx)
 
     def configure_optimizers(self):
-        return torch.optim.Adam(self.parameters(), lr=1e-3)
+        return  torch.optim.Adam(self.parameters(), lr=self.learning_rate, weight_decay = self.weight_decay)
+

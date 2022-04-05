@@ -4,3 +4,4 @@ __pycache__
 lightning_logs
 .venv
 env
+data/la_train_grid.csv
