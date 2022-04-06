@@ -2,6 +2,7 @@ from pytorch_lightning import Trainer
 from pytorch_lightning import utilities
 from dataloaders import get_iterators
 from models.GRU import GRU, EdgeGNN, GCN
+import os
 import pandas as pd
 import numpy as np
 import torch 
@@ -13,6 +14,9 @@ data_file = 'LA_DATA_2018_02_to_2018_06.csv'
 # node_cols = 'visibility', 'precipitation_depth']
 node_cols = ['temperature', 'pressure', 'ceiling', 'dew', 'precipitation_duration' , 'mean_aod','min_aod','max_aod']                                                 
 edge_cols = ['wind_x', 'wind_y']
+
+results_folder = 'Results'
+# '/Users/alixdanglejan-chatillon/ECSE552_Project/Results/
 
 # GRAPH CONFIG
 dist_thresh = 30e6
@@ -96,9 +100,8 @@ trainer.fit(model, train_dl, val_dl)
 
 training_df = {'Loss': model.training_losses, 'Error': model.training_metrics}
 training_df  = pd.DataFrame(training_df)
-training_df.to_csv('/Users/alixdanglejan-chatillon/ECSE552_Project/Results/TrainingResults1.csv')
+training_df.to_csv(os.path.join(results_folder, 'TrainingResults1.csv'))
 
 validation_df = {'Loss': model.validation_losses, 'Error': model.validation_metrics}
 validation_df  = pd.DataFrame(validation_df)
-validation_df.to_csv('/Users/alixdanglejan-chatillon/ECSE552_Project/Results/ValidationResults1.csv')
-
+validation_df.to_csv(os.path.join(results_folder, 'ValidationResults1.csv'))
