@@ -15,8 +15,8 @@ data_file = 'LA_DATA_2018_02_to_2018_06.csv'
 node_cols = ['temperature', 'pressure', 'ceiling', 'dew', 'precipitation_duration' , 'mean_aod','min_aod','max_aod']                                                 
 edge_cols = ['wind_x', 'wind_y']
 
-results_folder = 'Results'
-# '/Users/alixdanglejan-chatillon/ECSE552_Project/Results/
+results_folder = os.path.join(os.getcwd(), 'Results')
+# '/Users/alixdanglejan-chatillon/ECSE552_Project/Results/'
 
 # GRAPH CONFIG
 dist_thresh = 30e6
