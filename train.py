@@ -53,23 +53,26 @@ NUM_WORKERS = 0
 #OPTIMIZER
 learning_rate = 1e-3
 weight_decay = 1e-5
-criterion = 'abs_error'
+amsgrad = True
+criterion = 'abs_err'
 # 'pc_err', 'mse'
 
 
 utilities.seed.seed_everything(seed=SEED)
 
-train_dl, val_dl, edge_idx = get_iterators(data_file,
-                                            edge_cols, 
-                                            node_cols, 
-                                            split = train_test_split,
-                                            historical_len = historical_len,
-                                            pred_len = pred_len,
-                                            batch_size = batch_size,
-                                            dist_thresh = dist_thresh, 
-                                            multi_edge_feature = multi_edge_feature,
-                                            use_self_loops =  use_self_loops, 
-                                            num_workers = NUM_WORKERS)
+train_dl, val_dl, edge_idx = get_iterators(
+    data_file,
+    edge_cols, 
+    node_cols, 
+    split = train_test_split,
+    historical_len = historical_len,
+    pred_len = pred_len,
+    batch_size = batch_size,
+    dist_thresh = dist_thresh, 
+    multi_edge_feature = multi_edge_feature,
+    use_self_loops =  use_self_loops, 
+    num_workers = NUM_WORKERS
+    )
 
 
 if graph_model == 'EdgeGNN':
@@ -93,7 +96,8 @@ model = GRU(
     graph_model=graph_model, 
     criterion = criterion, 
     learning_rate = learning_rate, 
-    weight_decay = weight_decay
+    weight_decay = weight_decay,
+    amsgrad = amsgrad
     )
 
 logger = TensorBoardLogger(
@@ -109,10 +113,10 @@ trainer = Trainer(
 
 trainer.fit(model, train_dl, val_dl)
 
-training_df = {'Loss': model.training_losses, 'Error': model.training_metrics}
-training_df  = pd.DataFrame(training_df)
-training_df.to_csv(os.path.join(results_folder, 'TrainingResults1.csv'))
+# training_df = {'Loss': model.training_losses, 'Error': model.training_metrics}
+# training_df  = pd.DataFrame(training_df)
+# training_df.to_csv(os.path.join(results_folder, 'TrainingResults1.csv'))
 
-validation_df = {'Loss': model.validation_losses, 'Error': model.validation_metrics}
-validation_df  = pd.DataFrame(validation_df)
-validation_df.to_csv(os.path.join(results_folder, 'ValidationResults1.csv'))
+# validation_df = {'Loss': model.validation_losses, 'Error': model.validation_metrics}
+# validation_df  = pd.DataFrame(validation_df)
+# validation_df.to_csv(os.path.join(results_folder, 'ValidationResults1.csv'))

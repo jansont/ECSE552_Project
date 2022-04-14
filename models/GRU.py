@@ -100,7 +100,8 @@ class GRU(LightningModule):
                 graph_model,
                 criterion, 
                 learning_rate, 
-                weight_decay):
+                weight_decay,
+                amsgrad):
 
         super().__init__()
 
@@ -120,6 +121,7 @@ class GRU(LightningModule):
         self.criterion = criterion
         self.learning_rate = learning_rate
         self.weight_decay = weight_decay
+        self.amsgrad = amsgrad
 
         self.pc_err = MAPE()
         self.abs_err = nn.L1Loss()
@@ -204,5 +206,9 @@ class GRU(LightningModule):
         return self.step(batch, batch_idx)
 
     def configure_optimizers(self):
-        return  torch.optim.Adam(self.parameters(), lr=self.learning_rate, weight_decay = self.weight_decay)
-
+        return  torch.optim.Adam(
+            self.parameters(),
+            lr=self.learning_rate,
+            weight_decay=self.weight_decay,
+            amsgrad=self.amsgrad
+            )
