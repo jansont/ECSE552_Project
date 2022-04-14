@@ -3,6 +3,45 @@ import torch
 from torch.utils.data import DataLoader, Dataset
 from torch.nn.utils.rnn import pad_sequence
 from utils.data_utils import gather_graph_data
+from sklearn.preprocessing import MinMaxScaler
+
+
+class StaticGraphDataset(Dataset):
+    def __init__(self, 
+                labels, 
+                node_features,
+                edge_features, 
+                prenormalized = True, 
+                prescaled = True):
+
+            
+        self.edge_features = torch.tensor(edge_features)
+        self.labels = torch.tensor(labels)
+        self.node_features = torch.tensor(node_features)
+
+        if not prenormalized: 
+
+            feat_mean = node_features.mean(axis=0)
+            feat_sdev = node_features.std(axis=0)
+
+            self.features = np.zeros(node_features.shape)
+            for i in range(node_features.shape[1]):
+                self.features[:, i] = (node_features[:, i] - feat_mean[i])/feat_sdev[i]
+            self.features = torch.tensor(self.features)
+            self.node_features = self.features
+
+        if not prescaled: 
+            for i in range(self.feautures.shape[0]):
+                scaler = MinMaxScaler()
+                self.features[i] = scaler.fit_transform(self.features[i])
+            self.node_features = self.features
+
+
+    def __len__(self):
+        return self.node_features.shape[0]
+
+    def __getitem__(self, idx):
+        return self.node_features[idx], self.edge_features[idx], self.labels[idx]
 
 
 class WeatherData(Dataset):
@@ -12,7 +51,8 @@ class WeatherData(Dataset):
                  edge_features, 
                  historical_len, 
                  prediction_len, 
-                 prenormalized = True
+                 prenormalized = True, 
+                 prescaled = True, 
                  ):
         
         self.historical_len = historical_len
@@ -24,14 +64,20 @@ class WeatherData(Dataset):
 
         feat_mean = node_features.mean(axis=0)
         feat_sdev = node_features.std(axis=0)
-        self.features = np.zeros(node_features.shape)
 
         if not prenormalized: 
+            self.features = np.zeros(node_features.shape)
             for i in range(node_features.shape[1]):
                 self.features[:, i] = (node_features[:, i] - feat_mean[i])/feat_sdev[i]
             self.features = torch.tensor(self.features)
         else: 
             self.features = torch.tensor(node_features)
+
+        if not prescaled: 
+            for i in range(self.feautures.shape[0]):
+                scaler = MinMaxScaler()
+                self.features[i] = scaler.fit_transform(self.features[i])
+
 
     def __len__(self):
         return len(self.labels - self.seq_len)
@@ -100,3 +146,27 @@ def get_iterators(data_file,
                                                  drop_last=True, collate_fn=collate_batch)
 
     return train_dataloader, val_dataloader, graph.edge_index
+
+
+
+def gather_static_graphs(data_file,
+                        edge_cols,
+                        node_cols, 
+                        dist_thresh,
+                        multi_edge_feature,
+                        use_self_loops):
+    graph, graph_data = gather_graph_data(data_file,
+                                          edge_cols,
+                                          node_cols, 
+                                          dist_thresh,
+                                          multi_edge_feature,
+                                          use_self_loops)
+
+    graph_edge_features, graph_node_features, graph_labels = graph_data  
+    graph_states_set = StaticGraphDataset(edge_features = graph_edge_features, 
+                                    labels = graph_labels,
+                                    node_features = graph_node_features)
+    
+    graph_states_loader = DataLoader(graph_states_set, batch_size= 1)
+    return graph_states_loader, graph
+    
