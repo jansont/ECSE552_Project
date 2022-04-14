@@ -1,3 +1,4 @@
+from pytorch_lightning.loggers import TensorBoardLogger
 from pytorch_lightning import Trainer
 from pytorch_lightning import utilities
 from dataloaders import get_iterators
@@ -51,10 +52,8 @@ NUM_WORKERS = 0
 #OPTIMIZER
 learning_rate = 1e-3
 weight_decay = 1e-5
-criterion = nn.L1Loss()
-# criterion = nn.MSELoss()
-metrics = MAPE()
-
+criterion = 'abs_error'
+# 'pc_err', 'mse'
 
 
 utilities.seed.seed_everything(seed=SEED)
@@ -92,14 +91,19 @@ model = GRU(
     edge_idx=edge_idx, 
     graph_model=graph_model, 
     criterion = criterion, 
-    metrics = metrics, 
     learning_rate = learning_rate, 
     weight_decay = weight_decay
     )
 
+logger = TensorBoardLogger(
+        save_dir='Results/TB_logs',
+        default_hp_metric=True
+)
+
 trainer = Trainer(
     gpus=AVAIL_GPUS,
-    max_epochs=EPOCHS
+    max_epochs=EPOCHS,
+    logger=logger
 )
 
 trainer.fit(model, train_dl, val_dl)
