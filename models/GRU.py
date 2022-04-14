@@ -7,6 +7,7 @@ from torch.nn import functional as F
 from torch_scatter import scatter_add
 from torch.nn import ReLU
 from torch_geometric.nn import GCNConv
+from pytorch_forecasting.metrics import MAPE
 
 class RMSLELoss(nn.Module):
     def __init__(self):
@@ -99,8 +100,8 @@ class GRU(LightningModule):
                 graph_model,
                 criterion, 
                 learning_rate, 
-                weight_decay, 
-                metrics):
+                weight_decay,
+                amsgrad):
 
         super().__init__()
 
@@ -117,15 +118,14 @@ class GRU(LightningModule):
 
         self.rnncell = nn.GRUCell(input_dim, hidden_dim, n_layers)
 
-        self.loss_func = criterion
-        self.metric = metrics
+        self.criterion = criterion
         self.learning_rate = learning_rate
         self.weight_decay = weight_decay
+        self.amsgrad = amsgrad
 
-        self.training_losses = []
-        self.validation_losses = []
-        self.training_metrics = []
-        self.validation_metrics = []
+        self.pc_err = MAPE()
+        self.abs_err = nn.L1Loss()
+        self.mse = nn.MSELoss()
 
     def forward(self, X):
         """
@@ -178,28 +178,37 @@ class GRU(LightningModule):
         pred = self(x)
         return y.squeeze().float(), pred
 
-    def step(self, batch, batch_idx):
-        y, pred = self.predict_step(batch, batch_idx)
-        loss = self.loss_func(y, pred)
-        metric = self.metric(pred, y)
-        self.log('RMSE', metric)
-        return loss, metric
+    def get_metrics(self, pred, y):
+        metrics = dict(
+            abs_err=self.abs_err(pred, y),
+            pc_err=self.pc_err(pred, y),
+            mse=self.mse(pred, y),
+        )
+        return metrics
 
     def training_step(self, batch, batch_idx):
-        training_loss, training_metric = self.step(batch, batch_idx)
-        self.training_losses.append(training_loss.detach().numpy())
-        self.training_metrics.append(training_metric.detach().numpy())
-        return training_loss
+        y, pred = self.predict_step(batch, batch_idx)
+        metrics = self.get_metrics(pred, y)
+        self.log_dict(
+            {f'train/{k}': v for k, v in metrics.items()},
+            )
+        return metrics[self.criterion]
 
     def validation_step(self, batch, batch_idx):
-        validation_loss, validation_metric = self.step(batch, batch_idx)
-        self.validation_losses.append(validation_loss.detach().numpy())
-        self.validation_metrics.append(validation_metric.detach().numpy())
-        return validation_loss
+        pred, y = self.predict_step(batch, batch_idx)
+        metrics = self.get_metrics(pred, y)
+        self.log_dict(
+            {f'valid/{k}': v for k, v in metrics.items()},
+            on_epoch=True
+            )
 
     def test_step(self, batch, batch_idx):
         return self.step(batch, batch_idx)
 
     def configure_optimizers(self):
-        return  torch.optim.Adam(self.parameters(), lr=self.learning_rate, weight_decay = self.weight_decay)
-
+        return  torch.optim.Adam(
+            self.parameters(),
+            lr=self.learning_rate,
+            weight_decay=self.weight_decay,
+            amsgrad=self.amsgrad
+            )
