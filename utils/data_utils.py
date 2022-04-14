@@ -94,7 +94,8 @@ def gather_graph_data(weather_file,
                      node_cols,
                      dist_thresh,
                      multi_edge_feature, 
-                     use_self_loops):
+                     use_self_loops, 
+                     pseudo_data = False):
     '''
     Read csv weather, aod, pm and meta data from file. Convert to np. Create graph.
     Args: 
@@ -108,7 +109,7 @@ def gather_graph_data(weather_file,
 
     weather_data = pd.read_csv(path+weather_file)
     #convert to np
-    graph_node_features, graph_edge_features, graph_labels = data_to_numpy(weather_data, edge_cols, node_cols, pseudo_data = False)
+    graph_node_features, graph_edge_features, graph_labels = data_to_numpy(weather_data, edge_cols, node_cols, pseudo_data)
     #build graph
     metadata = weather_data[['STATION', 'Latitudes', 'Longitudes']].drop_duplicates()
     metadata = metadata.reset_index(drop=True).sort_values('STATION')

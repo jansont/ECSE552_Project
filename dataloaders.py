@@ -154,13 +154,15 @@ def gather_static_graphs(data_file,
                         node_cols, 
                         dist_thresh,
                         multi_edge_feature,
-                        use_self_loops):
+                        use_self_loops, 
+                        pseudo_data = False):
     graph, graph_data = gather_graph_data(data_file,
                                           edge_cols,
                                           node_cols, 
                                           dist_thresh,
                                           multi_edge_feature,
-                                          use_self_loops)
+                                          use_self_loops, 
+                                          pseudo_data)
 
     graph_edge_features, graph_node_features, graph_labels = graph_data  
     graph_states_set = StaticGraphDataset(edge_features = graph_edge_features, 
