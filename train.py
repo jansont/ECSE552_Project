@@ -29,12 +29,13 @@ multi_edge_feature = False
 use_self_loops = True
 
 #GRU CONFIG
-historical_len = 1
+historical_len = 2
 batch_size = 16
 pred_len = 1
 HIDDEN_DIM = 128
 n_layers = 2
 graph_model = 'EdgeGNN'
+edge_gnn_in  = 17
 
 #GRAPH HYP.
 dropout = 0.3
@@ -72,7 +73,7 @@ train_dl, val_dl, edge_idx = get_iterators(data_file,
 
 
 if graph_model == 'EdgeGNN':
-    graph_model = EdgeGNN(edge_idx, in_dim = 17, dropout = dropout)
+    graph_model = EdgeGNN(edge_idx, in_dim = edge_gnn_in, dropout = dropout)
 elif graph_model == 'GCN':
     graph_model = GCN(in_channels = len(node_cols), dropout = dropout)
 else:
