@@ -20,8 +20,6 @@ node_cols = ['temperature', 'pressure', 'ceiling', 'dew', 'precipitation_duratio
 edge_cols = ['wind_x', 'wind_y']
 
 results_folder = os.path.join(os.getcwd(), 'Results')
-# '/Users/alixdanglejan-chatillon/ECSE552_Project/Results/'
-
 
 # GRAPH CONFIG
 dist_thresh = 30e6
@@ -38,7 +36,7 @@ graph_model = 'EdgeGNN'
 edge_gnn_in  = 17
 
 #GRAPH HYP.
-dropout = 0.3
+dropout = 0.05
 
 #DATA CONFIG
 train_test_split = 0.8
@@ -46,7 +44,7 @@ train_test_split = 0.8
 #TRAINER CONFIG
 AVAIL_GPUS = 0
 SEED = 0
-EPOCHS = 50   
+EPOCHS = 200
 NUM_WORKERS = 0
 
 
@@ -54,7 +52,7 @@ NUM_WORKERS = 0
 learning_rate = 1e-3
 weight_decay = 1e-5
 amsgrad = True
-criterion = 'abs_err'
+criterion = 'mse'
 # 'pc_err', 'mse'
 
 
@@ -112,11 +110,3 @@ trainer = Trainer(
 )
 
 trainer.fit(model, train_dl, val_dl)
-
-# training_df = {'Loss': model.training_losses, 'Error': model.training_metrics}
-# training_df  = pd.DataFrame(training_df)
-# training_df.to_csv(os.path.join(results_folder, 'TrainingResults1.csv'))
-
-# validation_df = {'Loss': model.validation_losses, 'Error': model.validation_metrics}
-# validation_df  = pd.DataFrame(validation_df)
-# validation_df.to_csv(os.path.join(results_folder, 'ValidationResults1.csv'))

@@ -6,3 +6,4 @@ tqdm
 pytorch_forecasting
 torch_geometric
 torch_sparse
+dgl
