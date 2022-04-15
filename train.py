@@ -44,7 +44,7 @@ train_test_split = 0.8
 #TRAINER CONFIG
 AVAIL_GPUS = 0
 SEED = 0
-EPOCHS = 200
+EPOCHS = 150
 NUM_WORKERS = 0
 
 

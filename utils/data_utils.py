@@ -19,7 +19,7 @@ def get_date_range(file):
         print('wrong file name.')
 
 
-def data_to_numpy(weather_data, edge_cols, node_cols, pseudo_data=False, save=True):
+def data_to_numpy(weather_data, edge_cols, node_cols, date_range, pseudo_data=False, save=True):
     '''Converts pandas whether data to np array. 
     Args: 
         weather_data :: pd.DataFrame
@@ -46,7 +46,7 @@ def data_to_numpy(weather_data, edge_cols, node_cols, pseudo_data=False, save=Tr
         stations = weather_data['STATION'].unique()
         stations.sort()
 
-        date_range = sorted(weather_data['DATE'].unique(
+        present_dates = sorted(weather_data['DATE'].unique(
         ), key=lambda x: datetime.datetime.strptime(x, '%Y-%m-%d'))
 
         graph_node_features = np.empty(
@@ -56,37 +56,78 @@ def data_to_numpy(weather_data, edge_cols, node_cols, pseudo_data=False, save=Tr
         graph_labels = np.empty((len(date_range), len(stations)))
         stations.sort()
 
+
+
         for day_idx in range(len(date_range)):
+
+            if date_range[day_idx] not in present_dates: 
+                earliest_date_with_data = day_idx
+                while date_range[earliest_date_with_data] not in present_dates:
+                    earliest_date_with_data -= 1
+                next_day_with_data = day_idx
+                while date_range[next_day_with_data] not in present_dates:
+                    next_day_with_data += 1
+
+                x = [date_range[earliest_date_with_data], date_range[next_day_with_data]]
+                vals = weather_data[weather_data['DATE'].isin(x)]
+            
+            else: 
+                vals = weather_data[weather_data['DATE'] == date_range[day_idx]]
+
             for station_idx in range(len(stations)):
                 # crop dataframe to desired date and station
-                vals = weather_data[weather_data['DATE']
-                                    == date_range[day_idx]]
                 vals = vals[vals['STATION'] == stations[station_idx]]
-                pm = vals['pm25'].values  # get pm
-                # crop out edge features
-                edge_vals = vals[edge_cols]
-                edge_vals = np.array(edge_vals.values.tolist()).flatten()
-                # crop out node features
-                node_vals = vals[node_cols]
-                # node features as array
-                node_vals = np.array(node_vals.values.tolist()).flatten()
 
-                # certain stations have missing data on a given day, fill with geo mean
-                if len(node_vals) == 0:
-                    node_vals = weather_data[weather_data['DATE'] ==
-                                             date_range[day_idx]][node_cols].mean().values
 
-                if len(pm) == 0:
-                    pm = weather_data[weather_data['DATE'] ==
-                                      date_range[day_idx]]['pm25'].mean()
+                if date_range[day_idx] not in present_dates: 
+                    if len(vals.index) == 0 :
+                        node_vals = weather_data[weather_data['DATE'] ==
+                                                date_range[earliest_date_with_data]][node_cols].mean().values
+                        edge_vals = weather_data[weather_data['DATE'] ==
+                                                date_range[earliest_date_with_data]][edge_cols].mean().values
+                        pm = weather_data[weather_data['DATE'] ==
+                                        date_range[earliest_date_with_data]]['pm25'].mean()  
 
-                if len(edge_vals) == 0:
-                    edge_vals = weather_data[weather_data['DATE'] ==
-                                             date_range[day_idx]][edge_cols].mean().values
+                    else:
+                        vals = vals[vals['STATION'] == stations[station_idx]]
+                        node_vals  = vals[node_cols].mean().values
+                        edge_vals = vals[edge_cols].mean().values
+                        pm = vals['pm25'].mean()
+                        
+                        if np.isnan(node_vals).any():
+                            print(len(vals.index))
+                            print(vals)
+                            assert False  
+
+
+                else: 
+
+                    pm = vals['pm25'].values  # get pm
+                    # crop out edge features
+                    edge_vals = vals[edge_cols]
+                    edge_vals = np.array(edge_vals.values.tolist()).flatten()
+                    # crop out node features
+                    node_vals = vals[node_cols]
+                    # node features as array
+                    node_vals = np.array(node_vals.values.tolist()).flatten()
+
+                    # certain stations have missing data on a given day, fill with geo mean
+                    if len(node_vals) == 0:
+                        node_vals = weather_data[weather_data['DATE'] ==
+                                                date_range[day_idx]][node_cols].mean().values
+
+                    if len(pm) == 0:
+                        pm = weather_data[weather_data['DATE'] ==
+                                        date_range[day_idx]]['pm25'].mean()
+
+                    if len(edge_vals) == 0:
+                        edge_vals = weather_data[weather_data['DATE'] ==
+                                                date_range[day_idx]][edge_cols].mean().values       
 
                 graph_labels[day_idx, station_idx] = pm
                 graph_node_features[day_idx, station_idx] = node_vals
                 graph_edge_features[day_idx, station_idx] = edge_vals
+
         if save:
             print('Creating checkpoint')
             np.save(os.path.join(checkpt, 'graph_node_features'),
@@ -128,11 +169,14 @@ def gather_graph_data(weather_file,
         weather_data = pd.read_csv(weather_file)
     else:
         weather_data = pd.read_csv(path+weather_file)
+
+    date_range = get_date_range(weather_file)
+
     stations = np.random.choice(weather_data['STATION'].unique(), 16)
     weather_data = weather_data.loc[weather_data['STATION'].isin(stations)]
     # convert to np
     graph_node_features, graph_edge_features, graph_labels = data_to_numpy(
-        weather_data, edge_cols, node_cols, pseudo_data, save)
+        weather_data, edge_cols, node_cols, date_range, pseudo_data, save)
     # build graph
     metadata = weather_data[['STATION', 'Latitudes',
                              'Longitudes']].drop_duplicates()

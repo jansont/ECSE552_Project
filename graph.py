@@ -129,8 +129,8 @@ class Graph():
         self.size = len(self.nodes) 
         self.edge_index, self.edge_attr = self.generate_edges()     
         self.adjacency_matrix = self.get_adjacency_matrix()         
-        self.edge_adjacency = self.get_edge_adjacency()
-        self.transformation_matrix = self.get_transformation_matrix()
+        # self.edge_adjacency = self.get_edge_adjacency()
+        # self.transformation_matrix = self.get_transformation_matrix()
 
     def generate_edges(self):
         '''
