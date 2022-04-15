@@ -1,9 +1,12 @@
+import datetime
+import os
+from datetime import date, timedelta
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
-import os
-import datetime
-from datetime import date, timedelta
 from graph import Graph
+
 
 def get_date_range(file):
     if file == 'LA_DATA_2018_02_to_2018_06.csv': 
@@ -15,7 +18,7 @@ def get_date_range(file):
     else:
         print('wrong file name.')
 
-def data_to_numpy(weather_data, edge_cols, node_cols, pseudo_data = False): 
+def data_to_numpy(weather_data, edge_cols, node_cols, pseudo_data = False, save=True): 
     '''Converts pandas whether data to np array. 
     Args: 
         weather_data :: pd.DataFrame
@@ -74,11 +77,11 @@ def data_to_numpy(weather_data, edge_cols, node_cols, pseudo_data = False):
                     graph_labels[day_idx, station_idx] = pm
                     graph_node_features[day_idx, station_idx] = node_vals 
                     graph_edge_features[day_idx, station_idx] = edge_vals
-                    
-        print('Creating checkpoint')
-        np.save(os.path.join(checkpt, 'graph_node_features'), graph_node_features)
-        np.save(os.path.join(checkpt, 'graph_edge_features'), graph_edge_features)
-        np.save(os.path.join(checkpt, 'graph_labels'), graph_labels)
+        if save:
+            print('Creating checkpoint')
+            np.save(os.path.join(checkpt, 'graph_node_features'), graph_node_features)
+            np.save(os.path.join(checkpt, 'graph_edge_features'), graph_edge_features)
+            np.save(os.path.join(checkpt, 'graph_labels'), graph_labels)
 
     else:
         print('Found Checkpoint, loading')
@@ -95,7 +98,8 @@ def gather_graph_data(weather_file,
                      dist_thresh,
                      multi_edge_feature, 
                      use_self_loops, 
-                     pseudo_data = False):
+                     pseudo_data = False,
+                     save=True):
     '''
     Read csv weather, aod, pm and meta data from file. Convert to np. Create graph.
     Args: 
@@ -106,10 +110,12 @@ def gather_graph_data(weather_file,
             name of columns to be node features
     '''
     path = './data/'
-
-    weather_data = pd.read_csv(path+weather_file)
+    if isinstance(weather_file, Path):
+        weather_data = pd.read_csv(weather_file)
+    else:
+        weather_data = pd.read_csv(path+weather_file)
     #convert to np
-    graph_node_features, graph_edge_features, graph_labels = data_to_numpy(weather_data, edge_cols, node_cols, pseudo_data)
+    graph_node_features, graph_edge_features, graph_labels = data_to_numpy(weather_data, edge_cols, node_cols, pseudo_data, save)
     #build graph
     metadata = weather_data[['STATION', 'Latitudes', 'Longitudes']].drop_duplicates()
     metadata = metadata.reset_index(drop=True).sort_values('STATION')
