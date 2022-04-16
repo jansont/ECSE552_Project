@@ -32,7 +32,7 @@ class GCN(torch.nn.Module):
 
     def forward(self, x, edge_index) :
         # x: Node feature matrix of shape [num_nodes, in_channels]
-        # edge_index: Graph connectivity matrix of shape [2, num_edges]
+        # edge_igitndex: Graph connectivity matrix of shape [2, num_edges]
         x = self.conv1(x, edge_index)
         x = self.dropout(x)
         x = self.relu(x)
