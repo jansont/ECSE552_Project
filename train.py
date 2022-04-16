@@ -27,12 +27,12 @@ multi_edge_feature = False
 use_self_loops = True
 
 #GRU CONFIG
-historical_len = 2
+historical_len = 1
 batch_size = 16
 pred_len = 1
 HIDDEN_DIM = 128
 n_layers = 2
-graph_model = 'GCN'
+graph_model = 'EdgeGNN'
 edge_gnn_in  = 17
 
 #GRAPH HYP.
@@ -52,7 +52,7 @@ NUM_WORKERS = 0
 learning_rate = 1e-3
 weight_decay = 1e-5
 amsgrad = True
-criterion = 'mse'
+criterion = 'abs_err'
 # 'pc_err', 'mse'
 
 

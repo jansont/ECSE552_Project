@@ -23,7 +23,6 @@ class GCN(torch.nn.Module):
     def __init__(self, in_channels, dropout):
         super(GCN, self).__init__()
         self.h1 = 16
-        self.h2 = 10
         self.dropout = nn.Dropout(dropout)
         self.conv1 = GCNConv(in_channels, self.h1)
         self.conv2 = GCNConv(self.h1, self.h1)
