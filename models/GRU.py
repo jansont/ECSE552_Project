@@ -28,6 +28,7 @@ class GCN(torch.nn.Module):
         self.conv1 = GCNConv(in_channels, self.h1)
         self.conv2 = GCNConv(self.h1, self.h1)
         self.conv3 = GCNConv(self.h1, 1)
+        self.relu = nn.ReLU()
 
 
     def forward(self, x, edge_index) :
@@ -35,10 +36,10 @@ class GCN(torch.nn.Module):
         # edge_index: Graph connectivity matrix of shape [2, num_edges]
         x = self.conv1(x, edge_index)
         x = self.dropout(x)
-        x = nn.ReLU()
+        x = self.relu(x)
         x = self.conv2(x, edge_index)
         x = self.dropout(x)
-        x = nn.ReLU(x)
+        x = self.relu(x)
         x = self.conv3(x, edge_index)
         return x
 
@@ -47,10 +48,10 @@ class EdgeGNN(nn.Module):
         super(EdgeGNN, self).__init__()
         self.edge_index = torch.LongTensor(edge_index)
 
-        e_h = 16
-        e_out = 16
+        e_h = 64
+        e_out = 64
         n_out = 1
-        e_h2 = 16
+        e_h2 = 32
         n_h = 12
 
         self.edge_mlp = Sequential(Linear(in_dim, e_h),
@@ -62,7 +63,7 @@ class EdgeGNN(nn.Module):
                                    Linear(e_h2, e_out),
                                    Sigmoid(),
                                    )
-        self.node_mlp = Sequential(Linear(e_out, n_h),
+        self.node_mlp = Sequential(Linear(e_out+1, n_h),
                                     nn.Dropout(dropout),       
                                    ReLU(),
                                    Linear(n_h, n_out),
@@ -73,11 +74,13 @@ class EdgeGNN(nn.Module):
         """
         x = (node_features, edge_features)
         """
-        node_features, edge_weight = x
+        node_features, edge_weight, label_prev = x
         edge_src, edge_target = self.edge_index
 
         node_src = node_features[:, edge_src]
         node_target = node_features[:, edge_target]
+
+        label_prev = label_prev.squeeze().unsqueeze(-1)
 
         out = torch.cat([node_src, node_target, edge_weight.unsqueeze(-1)], dim=-1).float()
 
@@ -86,6 +89,7 @@ class EdgeGNN(nn.Module):
         out_sub = scatter_add(out.neg(), edge_src, dim=1, dim_size=node_features.size(1))  # For higher version of PyG.
 
         out = out_add + out_sub
+        out = torch.cat([out, label_prev], dim=-1).float()
         out = self.node_mlp(out)
         return out
 
@@ -134,17 +138,17 @@ class GRU(LightningModule):
         (node_features, edge_features, labels_x, lengths) = X
         seq_len = node_features.shape[1]
         batch_size = node_features.shape[0]
-    
 
         h = torch.zeros(batch_size, self.hid_dim)
         out_total= []
+        labels_prev = labels_x[0]
         for i in range(seq_len):
 
             if isinstance(self.graph_model, GCN):
                 graph_input = (node_features[:, i])
                 graph_out = self.graph_model(graph_input.float(), self.edge_index)
             elif isinstance(self.graph_model, EdgeGNN):
-                graph_input = (node_features[:, i], edge_features[:, i])
+                graph_input = (node_features[:, i], edge_features[:, i], labels_prev)
                 graph_out = self.graph_model(graph_input)
 
             graph_out = graph_out.squeeze()
@@ -157,6 +161,8 @@ class GRU(LightningModule):
             # total = graph_out[labels_x.shape[-1]:].reshape([batch_size, labels_x.shape[-1], 4])
             
             pseudo_labels = pseudo_labels.unsqueeze(dim = -1)
+
+            labels_prev = pseudo_labels
 
             graph_out = graph_out.unsqueeze(-1)
 

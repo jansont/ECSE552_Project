@@ -32,7 +32,7 @@ batch_size = 16
 pred_len = 1
 HIDDEN_DIM = 128
 n_layers = 2
-graph_model = 'EdgeGNN'
+graph_model = 'GCN'
 edge_gnn_in  = 17
 
 #GRAPH HYP.
